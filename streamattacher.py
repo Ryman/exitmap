@@ -20,7 +20,7 @@ class StreamAttacher( object ):
     Everything else might attract suspicion.
     """
 
-    def __init__( self, circuitPool, ctrl ):
+    def __init__( self, circuitPool, ctrl , port_map):
         """
         Initialises a new 'StreamAttacher' object.
         """
@@ -28,6 +28,10 @@ class StreamAttacher( object ):
         self.circuitPool = circuitPool
         self.ctrl = ctrl
         self.count = 1
+
+        # HACKHACKHACK
+        # Map local ports to circuits
+        self.port_map = port_map
 
         # List of circuits which were already used for DNS but not yet for a
         # SOCKS connection.
@@ -57,7 +61,6 @@ class StreamAttacher( object ):
         # Attach stream to a circuit which was already used for a 'NEWRESOLVE'
         # event.
         elif stream.status == "NEW":
-
             logger.info("This is stream #%d." % self.count)
             self.count += 1
 
@@ -76,6 +79,9 @@ class StreamAttacher( object ):
 
         try:
             self.ctrl.attach_stream(stream.id, circuit)
+            logger.debug("Source_port: %s CircuitID: %s" % (stream.source_port, circuit))
+            c = self.ctrl.get_circuit(circuit)
+            self.port_map[stream.source_port] = c.path[-1] # Extract exit
         except (stem.InvalidRequest,
                 stem.UnsatisfiableRequest,
                 stem.OperationFailed) as err:
