@@ -113,6 +113,7 @@ class CircuitPool( object ):
                     return None
 
                 self.closeCircuit(circuit.getID())
+                continue
 
             try:
                 c = self.ctrl.get_circuit(circuit.getID())
