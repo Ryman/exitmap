@@ -2,6 +2,8 @@ Installation
 ============
 
 You will need the library [stem](https://stem.torproject.org).
+You can install the Python dependencies via pip.
+`pip install -r requirements.txt'
 
 First, get the current consensus by running:  
 `$ tor -f doc/torrc.fetch`
