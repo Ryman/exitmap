@@ -3,7 +3,7 @@
 import socket
 import pkgutil
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+import concurrent.futures
 
 import stem
 import stem.connection
@@ -97,7 +97,8 @@ def probe( moduleName, args, torCtrl ):
 
     # Create circuit pool and set up stream attacher.
     circuitPool = circuitpool.new(torCtrl, list(exitRelays))
-    eventHandler = streamattacher.new(circuitPool, torCtrl)
+    port_map = {}
+    eventHandler = streamattacher.new(circuitPool, torCtrl, port_map)
     torCtrl.add_event_listener(eventHandler.newEvent, EventType.STREAM)
 
     circuits = torCtrl.get_circuits()
@@ -105,17 +106,25 @@ def probe( moduleName, args, torCtrl ):
     for circuit in circuits:
         logger.debug(circuit)
 
-    executor = ProcessPoolExecutor(max_workers=const.CIRCUIT_POOL_SIZE)
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=const.CIRCUIT_POOL_SIZE)
     logger.debug("Beginning to populate process pool with %d jobs." % count)
 
     # Invoke a module instance for every exit relay.
+    futures = []
     for _ in xrange(count, 0, -1):
-
         cmd = command.new(None)
-        executor.submit(module.probe, cmd, count)
+        futures.append(executor.submit(module.probe, cmd, count))
         count -= 1
 
-    logger.info("Submitted jobs.  Terminating main scanner.")
+    for future in concurrent.futures.as_completed(futures):#, timeout=20):
+        try:
+            local_port, ip, success = future.result()
+            fingerprint, nickname = port_map[local_port]
+            print "%s %s %s %s" % (fingerprint, nickname, ip, success)
+        except Exception as e:
+            print('Exception: %s' % e)
+
+    logger.info("Finished work.  Terminating main scanner.")
 
 if __name__ == "__main__":
 
@@ -123,6 +132,5 @@ if __name__ == "__main__":
         exit(main())
     except KeyboardInterrupt:
         logger.warning("Keyboard interrupt.")
-        exit(1)
     finally:
         logger.info("Shutting down %s." % const.TOOL_NAME)
