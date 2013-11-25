@@ -6,7 +6,12 @@ Module to detect false positives for https://check.torproject.org.
 
 import socks
 import socket
-import urllib2
+import re
+
+try:
+    from http.client import HTTPSConnection
+except ImportError:
+    from httplib import HTTPSConnection
 
 import log
 import command
@@ -22,14 +27,36 @@ def probe( cmd, count=1 ):
     socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 10000)
     socket.socket = socks.socksocket
 
-    data = urllib2.urlopen("https://check.torproject.org", timeout=10).read()
+    local_port = -1
+    attempts = 3
+
+    while attempts > 0:
+        try:
+            h = HTTPSConnection('check.torproject.org', timeout=30)
+            h.request('GET', '/')
+            response = h.getresponse()
+            data = response.read()
+            local_port = h.sock.getsockname()[1]
+            break
+        except Exception as e:
+            logger.error("Exception raised, failed to get check.tpo: '%s'" % str(e))
+
+        attempts -= 1
 
     identifier = "Congratulations. This browser is configured to use Tor."
+    m = re.search("<strong>(?P<ip>\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})</strong>", data)
+    if m is not None:
+        ip = m.group('ip')
+    else:
+        ip = None
+
     if not (identifier in data):
         logger.error("Detected false negative.  Full dump below.")
         logger.error(data)
+        return (local_port, ip, False)
     else:
         logger.info("Passed the check test.")
+        return (local_port, ip, True)
 
 def main():
     """
